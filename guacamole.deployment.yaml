@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guacamole-app
+  namespace: guacamole
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guacamole
+  template:
+    metadata:
+      labels:
+        app: guacamole
+    spec:
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - guacd
+                topologyKey: "kubernetes.io/hostname"
+      serviceAccountName: guacamole-sa
+      containers:
+      - name: guacamole
+        image: jwetzell/guacamole:arm64
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop: ["ALL"]
+        resources: 
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 5
+        env:
+        - name: EXTENSIONS
+          value: auth-totp
+        - name: GUACD_HOSTNAME
+          value: guacd
+        - name: POSTGRES_DATABASE
+          value: guacamole_db
+        - name: POSTGRES_HOSTNAME
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: POSTGRESQL_AUTO_CREATE_ACCOUNTS
+          value: "true"
+        volumeMounts:
+        - name: drive
+          mountPath: /drive
+      volumes:
+      - name: drive
+        hostPath:
+          path: /guacamole/drive

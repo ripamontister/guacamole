@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guacd-app
+  namespace: guacamole
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guacd
+  template:
+    metadata:
+      labels:
+        app: guacd
+    spec:
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - guacamole
+                topologyKey: "kubernetes.io/hostname"
+      serviceAccountName: guacamole-sa
+      containers:
+      - name: guacd
+        image: linuxserver/guacd:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10 
+          timeoutSeconds: 10
+          failureThreshold: 5
+        volumeMounts:
+        - name: drive
+          mountPath: /drive
+        - name: record
+          mountPath: /record
+      volumes:
+      - name: drive
+        hostPath:
+          path: /guacamole/drive
+      - name: record
+        hostPath:
+          path: /guacamole/record
+      - name: drive
+        persistentVolumeClaim:
+          claimName: guacamole-drive-pvc
+      - name: record
+        persistentVolumeClaim:
+          claimName: guacamole-record-pvc
